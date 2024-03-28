@@ -74,7 +74,7 @@ export async function mintable(
 
   // check collection
   const detail = await collectionDetail(namespace, dataset, collection);
-  if (detail.seqId == 0) {
+  if (detail && detail.seqId == 0) {
     const signature = await createMintSignature(signer, detail.owner, collhash);
     await NFTmintedModel.insertMany([{
       _id: collhash,
