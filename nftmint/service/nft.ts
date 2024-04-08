@@ -123,7 +123,7 @@ export async function callbackNFT(
     },
   });
 
-  console.log(`NFTmintedModel.updateOne: ${JSON.stringify(res)}`)
+  console.log(`NFTmintedModel.updateOne: ${JSON.stringify(res)}`);
 
   watchTx(chain, txhash, collhash, 60);
   return [true, ""];
@@ -155,7 +155,7 @@ async function watchTx(
   }
 
   // sleep 1s
-  await sleep(1000)
+  await sleep(1000);
 
   const nftContracts = contracts().filter((c) => c.chain == chain);
   if (nftContracts.length === 0) {
@@ -165,21 +165,27 @@ async function watchTx(
 
   const provider = new ethers.providers.JsonRpcProvider(nftContract.rpc);
   const tx = await provider.getTransaction(txhash);
-  console.log(`getTransaction: ${txhash}, ${tx.confirmations}, ${nftContract.contract}`)
+  console.log(
+    `getTransaction: ${txhash}, ${tx.confirmations}, ${nftContract.contract}`,
+  );
   if (tx && tx.confirmations >= 5) {
-    const nft = ethers.ContractFactory.getContract(nftContract.contract, ABI, provider.getSigner());
-    console.log(`NFT: ${collhash}`)
+    const nft = ethers.ContractFactory.getContract(
+      nftContract.contract,
+      ABI,
+      provider.getSigner(),
+    );
+    console.log(`NFT: ${collhash}`);
     const tokenId = await nft.collectionIds(collhash);
-    console.log(`0 - watchTx: ${collhash}, minting tokenId ${tokenId}`)
+    console.log(`0 - watchTx: ${collhash}, minting tokenId ${tokenId}`);
     if (tokenId) {
-      console.log(`watchTx: ${collhash}, minting tokenId ${tokenId}`)
+      console.log(`watchTx: ${collhash}, minting tokenId ${tokenId}`);
 
-      const doc = await NFTmintedModel.findOne({_id: collhash})
+      const doc = await NFTmintedModel.findOne({ _id: collhash });
       if (doc && doc.status === MintStatus.Minted) {
-        return
+        return;
       }
 
-      console.log(`watchTx: ${collhash}, minted`)
+      console.log(`watchTx: ${collhash}, minted`);
 
       await NFTmintedModel.updateOne({
         chain: chain,
@@ -208,19 +214,68 @@ export function startNFTEventListener() {
         ABI,
         provider.getSigner(),
       );
-      
-      nft.on('MintCollection', (operator, collecor, collhash, tokenId, amount, event: ethers.Event) => {
-        console.log(operator, collecor, collhash, tokenId, amount, JSON.stringify(event))
 
-        const txhash = event.transactionHash;
-        try {
-          watchTx(nftContract.chain, txhash, collhash, 60);
-        } catch (error) {
-          console.log(`startNFTEventListener, watchTx MintCollection, error: ${error}`) 
-        }
-      });
+      nft.on(
+        "MintCollection",
+        (
+          operator,
+          collecor,
+          collhash,
+          tokenId,
+          amount,
+          event: ethers.Event,
+        ) => {
+          console.log(
+            operator,
+            collecor,
+            collhash,
+            tokenId,
+            amount,
+            JSON.stringify(event),
+          );
+
+          const txhash = event.transactionHash;
+          try {
+            watchTx(nftContract.chain, txhash, collhash, 60);
+          } catch (error) {
+            console.log(
+              `startNFTEventListener, watchTx MintCollection, error: ${error}`,
+            );
+          }
+        },
+      );
     } catch (error) {
       console.log(`startNFTEventListener, error: ${error}`);
     }
   });
+}
+
+export async function startNFTWatcher() {
+  while (true) {
+    console.log(`startNFTWatcher: scanning`);
+    const docs = await NFTmintedModel.find({
+      txhash: { "$ne": "" },
+      status: MintStatus.Minting,
+    });
+
+    docs.forEach((doc) => {
+      console.log(
+        `startNFTWatcher, minting nft: ${doc.collection} ${doc.txhash}`,
+      );
+      try {
+        if (!doc.chain || !doc.txhash || !doc.id) {
+          return;
+        }
+
+        watchTx(doc.chain, doc.txhash, doc.id, 60);
+      } catch (error) {
+        console.log(
+          `startNFTWatcher, watchTx MintCollection, error: ${error}`,
+        );
+      }
+    });
+
+    console.log(`startNFTWatcher: sleeping`);
+    await sleep(600 * 1000);
+  }
 }

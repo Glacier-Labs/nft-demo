@@ -8,6 +8,7 @@ export async function collectionDetail(namespace: string, dataset: string, colle
     const url = `${GLACIER_SCAN_ENDPOINT}/collection/detail?namespace=${namespace}&dataset=${dataset}&collection=${collection}`;
     const resp = await fetch(url);
     if (resp.status === 404) {
+        // deno-lint-ignore no-explicit-any
         return undefined as any
     }
     if (resp.status !== 200) {
@@ -17,4 +18,3 @@ export async function collectionDetail(namespace: string, dataset: string, colle
     const res = await resp.json();
     return res
 }
-
